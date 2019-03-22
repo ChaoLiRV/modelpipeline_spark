@@ -6,7 +6,7 @@ _The Spark code in this post is written in **Scala** and run on the **databricks
 ## Data Import
 
 The data used for training the model is stored in the Snowflake warehouse on the cloud. The [databricks-snowflake connector](https://docs.databricks.com/spark/latest/data-sources/snowflake.html) enables us to run SQL query to read data from Snowflake database. The `readDatafromSnowflake` function below configures the connection with Snowflake and executes the query of selecting all data fields from the Snowflake table `myTable` under the schema `mySchema` for a particular date range. The start and end date of the training set is specifed by the function arguments, and the function returns the entire dataset in a Dataframe format.
-```
+```scala
 import net.snowflake.spark.snowflake.SnowflakeConnectorUtils
 import net.snowflake.spark.snowflake.Utils.SNOWFLAKE_SOURCE_NAME
 import org.apache.spark.sql.functions._
