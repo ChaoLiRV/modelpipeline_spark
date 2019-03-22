@@ -1,3 +1,4 @@
+# Create and Deploy a Machine Learning Model Pipeline in Spark
 
 As data scientists in Red Ventures, we define ourselves as [type _'B'_ data scientist]( <https://www.dezyre.com/article/type-a-data-scientist-vs-type-b-data-scientist/194>), which differentiates with the role of business intelligents or data analysts. Besides providing business insights to drive actionable items, we are also dedicated to building models from end to end and deploying them as a service for business usage, both internally and externally . This post describes the general process of building a classification model pipeline in **Spark** and touches upon its deployment via a REST API.
 
