@@ -117,7 +117,7 @@ val splitSeed = 1234
 val Array(trainingData, testingData) = df_all.randomSplit(Array(0.8, 0.2), splitSeed)
 ```
 
-##Feature Transformer Pipeline 
+## Feature Transformer Pipeline 
 
 #### Numeric Variables
 For model running in production, it is always a good habit of setting a defensive layer to handle the anomaly gracefully. In this example, we have an **Imputer** transformer first in the pipeline to handle the missing values for numeric variables. The choice of the transformer is to some extent limited to the availability in **MLeap** _(refer to this document: <http://mleap-docs.combust.ml/core-concepts/transformers/support.html>)_. MLeap is the tool that we use to serialize the Spark model pipelines and we will touch on that later in this post. Suppose the transfomer function that you need does not exist on their list, follow the procedure here <http://mleap-docs.combust.ml/mleap-runtime/custom-transformer.html> to create the custom transformer.
@@ -295,3 +295,31 @@ featureNames.zip(coeffs).foreach { case (feature, coeff) =>
   println(s"$feature\t$coeff")
 }
 ```
+
+## Model Serialization and Deserialization for Deployment 
+
+In order to deploy the trained model to the production, we first serialize the _`final_pipeline_gbt`_ object into a single JSON file using MLeap. Serialization using MLeap is simple and straightforward and it supports serializing model to a directory or a zip file in the format of either JSON or Protobuf.
+```scala
+import ml.combust.bundle.BundleFile
+import ml.combust.bundle.serializer.SerializationFormat
+import ml.combust.mleap.spark.SparkSupport._
+import resource._
+
+for(bundle <- managed(BundleFile("jar:file:/chao/mymodel.zip"))) {
+  final_pipeline_gbt.writeBundle.format(SerializationFormat.Json).save(bundle)
+}
+```
+The model deployment is implemented as a service via the REST API. Simply take the saved JSON file and deserialize it inside a Scala web framework. This articule <https://auth0.com/blog/build-and-secure-a-scala-play-framework-api/> demonstrates how to build an API using Scala _**Play**_ framework.
+```scala
+import ml.combust.bundle.BundleFile
+import ml.combust.mleap.runtime.MleapSupport._
+import resource._
+
+val zipBundleM = (for(bundle <- managed(BundleFile("jar:file:/chao/mymodel.zip"))) yield {
+  bundle.loadMleapBundle().get
+}).opt.get
+
+val loaded_pipeline_gbt = zipBundleM.root
+```
+## Conclusion
+This post elaborates on the process of building a machine learning model pipeline in Spark, with the code snippets providing all the details for the implementation from data import, preprocessing, feature engineering, model tuning and training, to its deployment. Following this protocol enables myself to build a predictive model in production and serve our business. Hopefully this can be also helpful as a tutorial for people who are struggling with the Spark machine learning process.
