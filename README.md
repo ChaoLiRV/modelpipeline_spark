@@ -61,13 +61,13 @@ val dateStart:String = formatter.format(calendar.getTime())
 var df_all :DataFrame = readDatafromSnowflake(dateStart, dateStop)
 display(df_all.limit(5))
 ```
-| ID        | Var1       | Var2          | Var3     | Var4 | Var5      | Var6 | label |
-|-----------|------------|---------------|----------|------|-----------|------|-------|
-| 0001 | SmartPhone | Mobile Safari | Off-Peak | 1    | 484500.47 | 16   | 0     |
-| 0002 | Desktop    | Firefox       | Peak     | 0    | 513500.32 | NaN   | 1     |
-| 0003 | Desktop    | Chrome        | Off-Peak | 0    | 441000.45 | 25   | 0     |
-| 0004 | Desktop    | Safari        | Weekend  | 0    | 840000.4  | 2    | 0     |
-| 0005 | Desktop    | Chrome        | Peak     | 1    | NaN       | 22   | 1     |
+| ID   | Var1       | Var2     |Var3      | Var4 | Var5      | Var6 | label |
+|------|------------|----------|----------|------|-----------|------|-------|
+| 0001 | SmartPhone | NULL     | Off-Peak | 1    | 484500.47 | 16   | 0     |
+| 0002 | Mobile     | Firefox  | Peak     | 0    | 513500.32 | NaN  | 1     |
+| 0003 | Desktop    | Chrome   | Off-Peak | 0    | 441000.45 | 25   | 0     |
+| 0004 | Desktop    | Safari   | Weekend  | 0    | 840000.4  | 2    | 0     |
+| 0005 | Desktop    | Chrome   | Peak     | 1    | NaN       | 22   | 1     |
 
 It is obvious that the _Var1-3_ represent the device type, browser type, and time range respectively. To make these variable names descriptive, you can rename the dataframe columns using Spark Dataframe's method `WithColumnRenamed()`. In this exercise, I found a really useful function [foldLeft()](http://allaboutscala.com/tutorials/chapter-8-beginner-tutorial-using-scala-collection-functions/scala-foldleft-example/) that makes this process more scalable, in the sense that you need not write 100 statements for 100 variable's name changes. All you need is to make the _old name_ and _new name_ as a key-value pair and store it in the scala _Map_ value. No other code change is required. Similary, another example demonstrates how foldLeft is employed to replace NaN value for each numeric variable by its mean or median in the training data.
 ```scala
@@ -97,11 +97,10 @@ df_all = colNames.foldLeft(df_all){
 }
 display(df_all.limit(5))
 ```
-
 | ID   | Device     | Browser       | TimeRange| Var4 | Var5      | Var6 | label |
 |------|------------|---------------|----------|------|-----------|------|-------|
-| 0001 | SmartPhone | Mobile Safari | Off-Peak | 1    | 484500.47 | 16   | 0     |
-| 0002 | Desktop    | Firefox       | Peak     | 0    | 513500.32 | NaN   | 1     |
+| 0001 | SmartPhone | NULL          | Off-Peak | 1    | 484500.47 | 16   | 0     |
+| 0002 | Mobile     | Firefox       | Peak     | 0    | 513500.32 | NaN  | 1     |
 | 0003 | Desktop    | Chrome        | Off-Peak | 0    | 441000.45 | 25   | 0     |
 | 0004 | Desktop    | Safari        | Weekend  | 0    | 840000.4  | 2    | 0     |
 | 0005 | Desktop    | Chrome        | Peak     | 1    | NaN       | 22   | 1     |
@@ -121,7 +120,9 @@ val Array(trainingData, testingData) = df_all.randomSplit(Array(0.8, 0.2), split
 ## Feature Transformer Pipeline 
 
 #### Numeric Variables
-For model running in production, it is always a good habit of setting a defensive layer to handle the anomaly gracefully. In this example, we have an **Imputer** transformer first in the pipeline to handle the missing values for numeric variables. The choice of the transformer is to some extent limited to the availability in **MLeap** _(refer to this document: <http://mleap-docs.combust.ml/core-concepts/transformers/support.html>)_. MLeap is the tool that we use to serialize the Spark model pipelines and we will touch on that later in this post. Suppose the transfomer function that you need does not exist on their list, follow the procedure here <http://mleap-docs.combust.ml/mleap-runtime/custom-transformer.html> to create the custom transformer.
+For model running in production, it is always a good habit of setting a defensive layer to handle the anomaly gracefully. In this example, we set an **Imputer** transformer first in the pipeline to handle the missing values for numeric variables _Var5_ and _Var6_. 
+Two additional columns _Var5Impute_ and _Var6Impute_ are generated as a result that replace the original _NaN_ value by their median(see the example outcome below). 
+Note the choice of the transformer is to some extent limited to the availability in **MLeap** _(refer to this document: <http://mleap-docs.combust.ml/core-concepts/transformers/support.html>)_. MLeap is the tool that we use to serialize the Spark model pipelines and we will touch on that later in this post. Suppose the transfomer function that you need does not exist on their list, follow the procedure here <http://mleap-docs.combust.ml/mleap-runtime/custom-transformer.html> to create the custom transformer.
 ```scala
 import org.apache.spark.ml.mleap.feature.Imputer
 
@@ -137,13 +138,14 @@ val var6Imputer = new Imputer()
 ```
 | ID        | Device     | Browser       | TimeRange | Var4 | Var5      | Var6 | label | Var5Impute | Var6Impute |
 |-----------|------------|---------------|-----------|------|-----------|------|-------|------------|------------|
-| 136581531 | SmartPhone | Mobile Safari | Off-Peak  | 1    | 484500.47 | 16   | 0     | 484500.47  | 16         |
-| 138079502 | Desktop    | Firefox       | Peak      | 0    | 513500.32 | NaN  | 1     | 513500.32  | 16         |
+| 136581531 | SmartPhone | NULL          | Off-Peak  | 1    | 484500.47 | 16   | 0     | 484500.47  | 16         |
+| 138079502 | Mobile     | Firefox       | Peak      | 0    | 513500.32 | NaN  | 1     | 513500.32  | 16         |
 | 136280501 | Desktop    | Chrome        | Off-Peak  | 0    | 441000.45 | 25   | 0     | 441000.45  | 25         |
 | 136608744 | Desktop    | Safari        | Weekend   | 0    | 840000.4  | 2    | 0     | 840000.4   | 2          |
 | 136576205 | Desktop    | Chrome        | Peak      | 1    | NaN       | 22   | 1     | 275500.5   | 22         |
 
 Next we perform numeric operations on these variables, such as dividing one feature value by the other, taking the logarithmic transform of the value, and scale normalization (Min-Max or Z-score).
+The newly created columns by these operations are concatenated to the table as shown in the example below. 
 ```scala
 import org.apache.spark.ml.mleap.feature.MathBinary
 import ml.combust.mleap.core.feature.MathBinaryModel
@@ -156,13 +158,13 @@ import ml.combust.mleap.core.feature.UnaryOperation._
 val divider = new MathBinary(uid = "loantovalue", model = MathBinaryModel(Divide)) // 
                 .setInputA("Var5Impute")
                 .setInputB("Var6Impute")
-                .setOutputCol("var5_to_var6")
+                .setOutputCol("Var5_to_Var6")
 // unary operation (log transformation) on a single feature
 val logTramsformer = new MathUnary(uid = "ltvlog", model = MathUnaryModel(Log)) // 
                 .setInputCol("Var5Impute")
-                .setOutputCol("var_log")
+                .setOutputCol("Var5_Log")
 
-val assemblerNum = new VectorAssembler().setInputCols(Array("var5_to_var6","var_log"))
+val assemblerNum = new VectorAssembler().setInputCols(Array("Var5_to_Var6","Var5_Log"))
                                         .setOutputCol("numeric_features_vec")
 val scaler = new feature.StandardScaler()
                 .setInputCol("numeric_features_vec")
@@ -170,8 +172,17 @@ val scaler = new feature.StandardScaler()
                 .setWithStd(true)
                 .setWithMean(true)
 ```
+| ID        | Device     | Browser       | TimeRange | Var4 | Var5      | Var6 | label | Var5Impute | Var6Impute | Var5_to_Var6 | Var5_Log    | numeric_features_vec       | scaled_numeric_features |
+|-----------|------------|---------------|-----------|------|-----------|------|-------|------------|------------|--------------|-------------|----------------------------|-------------------------|
+| 136581531 | SmartPhone | NULL          | Off-Peak  | 1    | 484500.47 | 16   | 0     | 484500.47  | 16         | 30281.27938  | 5.685294203 | [30281.27938, 5.685294203] | [-0.1236, 0.9264]       |
+| 138079502 | Mobile     | Firefox       | Peak      | 0    | 513500.32 | NaN  | 1     | 513500.32  | 16         | 32093.77     | 5.710540719 | [32093.77, 5.710540719]    | [-0.1156, 1.0527]       |
+| 136280501 | Desktop    | Chrome        | Off-Peak  | 0    | 441000.45 | 25   | 0     | 441000.45  | 25         | 17640.018    | 5.644439033 | [17640.018, 5.644439033]   | [-0.1797, 0.7221]       |
+| 136608744 | Desktop    | Safari        | Weekend   | 0    | 840000.4  | 2    | 0     | 840000.4   | 2          | 420000.2     | 5.924279493 | [420000.2, 5.924279493]    | [1.6060, 2.1213]        |
+| 136576205 | Desktop    | Chrome        | Peak      | 1    | NaN       | 22   | 1     | 275500.5   | 22         | 12522.75     | 5.440122391 | [12522.75, 5.440122391]    | [-0.2024, -0.2993]      |
+
 #### Categorical Variables
 The first process step is same as the numerical variables, to set an imputation stage for handling the missing value in real world scenario. MLeap does not provide this transformer function as you cannot find it on this list <http://mleap-docs.combust.ml/core-concepts/transformers/support.html>, and therefore we create our own transformer _**StringImputer**_ by following the MLeap document as aforementioned. In categorical variables, sometimes values are representing the same thing and can be bucketed into one group, for instance _"Mobile"_ and _"SmartPhone"_. In this situation, the _**StringMapper**_ transformer is employed to achieve this. Note that I utilize a custom transformer in the code instead of the MLeap built-in _StringMap_, for the reason that their transformer does not allow to set the default value in the map. Next stage in the pipeline is the _**StringIndexer**_ that is another defensive layer to handle unseen values during training.
+See the table below with the columns _Device_Impute_, _Device_Map_ and _Device_Index_. For the best of comparison, the numeric variable columns are not shown here.
 ```scala
 import com.redventures.custom.core.transformer.StringMapperModel 
 import org.apache.spark.ml.custom.transformer.StringMapper
@@ -180,45 +191,63 @@ import org.apache.spark.ml.custom.transformer.StringImputer
 /* Device */
 val deviceImputer = new StringImputer(uid = "device_imp", model = StringImputerModel("OtherDevices")) 
                 .setInputCol("Device")
-                .setOutputCol("device_imp")
+                .setOutputCol("Device_Impute")
 val deviceMapper = new StringMapper(uid = "device_map", model = StringMapperModel(
                 Map("Mobile"->"SmartPhone","SmartPhone"->"SmartPhone","Desktop"->"Desktop","Tablet"->"Tablet"), "OtherDevices") ) //
-                .setInputCol("device_imp")
-                .setOutputCol("device_mod")
+                .setInputCol("Device_Impute")
+                .setOutputCol("Device_Map")
 val deviceIndexer = new feature.StringIndexer()
-                .setInputCol("device_mod")
-                .setOutputCol("deviceTypeIndex")
+                .setInputCol("Device_Map")
+                .setOutputCol("Device_Index")
                 .setHandleInvalid("keep")
 ```
-Repeat the procedures to apply transformers to other categorical variables _TimeRange_ and _Browser_. And then set the _one-hot encoding_ stage for all processed categorical variables.
+| ID        | Device     | Browser | TimeRange | Device_Impute | Device_Map | Device_Index |
+|-----------|------------|---------|-----------|---------------|------------|--------------|
+| 136581531 | SmartPhone | NULL    | Off-Peak  | SmartPhone    | SmartPhone | 1.0          |
+| 138079502 | Mobile     | Firefox | Peak      | Mobile        | SmartPhone | 1.0          |
+| 136280501 | Desktop    | Chrome  | Off-Peak  | Desktop       | Desktop    | 0.0          |
+| 136608744 | Desktop    | Safari  | Weekend   | Desktop       | Desktop    | 0.0          |
+| 136576205 | Desktop    | Chrome  | Peak      | Desktop       | Desktop    | 0.0          |
+
+Repeat the procedures to apply transformers to other categorical variables _TimeRange_ and _Browser_. And then set the _one-hot encoding_ stage for all processed categorical variables. 
+The output values by one-hot-encoding are represented in a sparse format. For example, _(2, [1], [1.0])_ in _Device_OHE_ indicates a vector of length of 2 with 1.0 at position 1 and 0 elsewhere.
 ```scala
 /* TimeRange */
 val timeImputer = new StringImputer(uid = "time_imp", model = StringImputerModel("Peak"))
                 .setInputCol("TimeRange")
-                .setOutputCol("Time_imp")
+                .setOutputCol("Time_Impute")
 val timeRangeIndexer = new StringIndexer()
-                .setInputCol("Time_imp")
-                .setOutputCol("timeRangeIndex")
+                .setInputCol("Time_Impute")
+                .setOutputCol("Time_Index")
                 .setHandleInvalid("keep")
 /* Browser */
-val browserImputer = new StringImputer(uid = "browser_imp", model = StringImputerModel("OtherBrowsers"))
+val browserImputer = new StringImputer(uid = "browser_imp", model = StringImputerModel("OtherBrowser"))
                 .setInputCol("Browser")
-                .setOutputCol("browser_imp")
+                .setOutputCol("Browser_Impute")
 val browserIndexer = new StringIndexer()
-                .setInputCol("browser_imp")
-                .setOutputCol("browserIndex")
+                .setInputCol("Browser_Impute")
+                .setOutputCol("Browser_Index")
                 .setHandleInvalid("keep")
 
-/* One hot encoding */
-val ohcs = new OneHotEncoderEstimator()
-              .setInputCols(Array("deviceTypeIndex","timeRangeIndex","browserIndex"))
-              .setOutputCols(Array("deviceTypeVec","timeRangeVec","browserVec"))
+/* One hot encodings */
+val ohes = new OneHotEncoderEstimator()
+              .setInputCols(Array("Device_Index","Time_Index","Browser_Index"))
+              .setOutputCols(Array("Device_OHE","Time_OHE","Browser_OHE"))
               .setDropLast(true)
 ```
-The classification model in **spark.ml** package is an estimator, which requires all feature data assembled as a vector for each record in the column _`"feature"`_. This is done by the transformer `VectorAssembler()`. Lastly, we stack all the aforementioned transformers in the sequence to a pipeline object. As a consequence, every single record of both training and testing set is guaranteed to go through the same feature engineering process without incurring exception by anomaly value.
+| ID        | Device     | Browser | TimeRange | Device_Impute | Device_Map | Device_Index | Time_Impute | Time_Index | Browser_Impute | Browser_Index | Device_OHE      | Time_OHE        | Browser_OHE     |
+|-----------|------------|---------|-----------|---------------|------------|--------------|-------------|------------|----------------|---------------|-----------------|-----------------|-----------------|
+| 136581531 | SmartPhone | NULL    | Off-Peak  | SmartPhone    | SmartPhone | 1.0          | Off-Peak    | 2.0        | OtherBrowser   | 3.0           | (2, [1], [1.0]) | (3, [2], [1.0]) | (4, [3], [1.0]) |
+| 138079502 | Mobile     | Firefox | Peak      | Mobile        | SmartPhone | 1.0          | Peak        | 0.0        | Firefox        | 1.0           | (2, [1], [1.0]) | (3, [0], [1.0]) | (4, [1], [1.0]) |
+| 136280501 | Desktop    | Chrome  | Off-Peak  | Desktop       | Desktop    | 0.0          | Off-Peak    | 2.0        | Chrome         | 0.0           | (2, [0], [1.0]) | (3, [2], [1.0]) | (4, [0], [1.0]) |
+| 136608744 | Desktop    | Safari  | Weekend   | Desktop       | Desktop    | 0.0          | Weekend     | 1.0        | Safari         | 2.0           | (2, [0], [1.0]) | (3, [1], [1.0]) | (4, [2], [1.0]) |
+| 136576205 | Desktop    | Chrome  | Peak      | Desktop       | Desktop    | 0.0          | Peak        | 0.0        | Chrome         | 0.0           | (2, [0], [1.0]) | (3, [0], [1.0]) | (4, [0], [1.0]) |
+
+The classification model in **spark.ml** package is an estimator, which requires all feature data assembled as a vector for each record in the column _`"feature"`_. This is done by the transformer `VectorAssembler()` and again the output values are represented in a sparse format as shown in the table below. 
+Lastly, we stack all the aforementioned transformers in the sequence to a pipeline object. As a consequence, every single record of both training and testing set is guaranteed to go through the same feature engineering process without incurring exception by anomaly value.
 ```scala
 /* assemble all processed features into a single vector */
-val featureCols = Array("deviceTypeVec", "timeRangeVec", "browserVec", "Var4", "scaled_numeric_features")
+val featureCols = Array("Device_OHE", "Time_OHE", "Browser_OHE", "Var4", "scaled_numeric_features")
 val assembler_all = new feature.VectorAssembler().setInputCols(featureCols).setOutputCol("features")
 
 // set the pipeline to include all the feature engineering stages
@@ -228,9 +257,16 @@ val feature_stages = new Pipeline()
                                   deviceImputer, deviceMapper, deviceIndexer, // Device type processing
                                   timeImputer, timeRangeIndexer, // Time range
                                   browserImputer, browserIndexer, // Browser 
-                                  ohcs, // one hot encoding
+                                  ohes, // one hot encoding
                                   assembler_all))
 ```
+| ID        | Device     | Browser | TimeRange | Var4 | Var5      | Var6 | label | Var5Impute | Var6Impute | Var5_to_Var6 | Var5_Log    | numeric_features_vec       | scaled_numeric_features | Device_Impute | Device_Map | Device_Index | Time_Impute | Time_Index | Browser_Impute | Browser_Index | Device_OHE      | Time_OHE        | Browser_OHE     | features                                           |
+|-----------|------------|---------|-----------|------|-----------|------|-------|------------|------------|--------------|-------------|----------------------------|-------------------------|---------------|------------|--------------|-------------|------------|----------------|---------------|-----------------|-----------------|-----------------|----------------------------------------------------|
+| 136581531 | SmartPhone | NULL    | Off-Peak  | 1    | 484500.47 | 16   | 0     | 484500.47  | 16         | 30281.27938  | 5.685294203 | [30281.27938, 5.685294203] | [-0.1236, 0.9264]       | SmartPhone    | SmartPhone | 1.0          | Off-Peak    | 2.0        | OtherBrowser   | 3.0           | (2, [1], [1.0]) | (3, [2], [1.0]) | (4, [3], [1.0]) | [(12, [1,4,8,9,10,11], [1,1,1,1,-0.1236,0.9264 ])] |
+| 138079502 | Mobile     | Firefox | Peak      | 0    | 513500.32 | NaN  | 1     | 513500.32  | 16         | 32093.77     | 5.710540719 | [32093.77, 5.710540719]    | [-0.1156, 1.0527]       | Mobile        | SmartPhone | 1.0          | Peak        | 0.0        | Firefox        | 1.0           | (2, [1], [1.0]) | (3, [0], [1.0]) | (4, [1], [1.0]) | [(12, [1,2,6,10,11], [1,1,1,-0.1156,1.0527])]      |
+| 136280501 | Desktop    | Chrome  | Off-Peak  | 0    | 441000.45 | 25   | 0     | 441000.45  | 25         | 17640.018    | 5.644439033 | [17640.018, 5.644439033]   | [-0.1797, 0.7221]       | Desktop       | Desktop    | 0.0          | Off-Peak    | 2.0        | Chrome         | 0.0           | (2, [0], [1.0]) | (3, [2], [1.0]) | (4, [0], [1.0]) | [(12, [0,4,5,10,11], [1,1,1,-0.1797,0.7221])]      |
+| 136608744 | Desktop    | Safari  | Weekend   | 0    | 840000.4  | 2    | 0     | 840000.4   | 2          | 420000.2     | 5.924279493 | [420000.2, 5.924279493]    | [1.6060, 2.1213]        | Desktop       | Desktop    | 0.0          | Weekend     | 1.0        | Safari         | 2.0           | (2, [0], [1.0]) | (3, [1], [1.0]) | (4, [2], [1.0]) | [(12, [0,3,7,10,11], [1,1,1,1.6060,2.1213])]       |
+| 136576205 | Desktop    | Chrome  | Peak      | 1    | NaN       | 22   | 1     | 275500.5   | 22         | 12522.75     | 5.440122391 | [12522.75, 5.440122391]    | [-0.2024, -0.2993]      | Desktop       | Desktop    | 0.0          | Peak        | 0.0        | Chrome         | 0.0           | (2, [0], [1.0]) | (3, [0], [1.0]) | (4, [0], [1.0]) | [(12, [0,2,5,9,10,11], [1,1,1,1,-0.2024,-0.2993])] |
 
 ## Model Estimator
 
