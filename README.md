@@ -64,10 +64,10 @@ display(df_all.limit(5))
 | ID        | Var1       | Var2          | Var3     | Var4 | Var5      | Var6 | label |
 |-----------|------------|---------------|----------|------|-----------|------|-------|
 | 0001 | SmartPhone | Mobile Safari | Off-Peak | 1    | 484500.47 | 16   | 0     |
-| 0002 | Desktop    | Firefox       | Peak     | 0    | 513500.32 | 16   | 1     |
+| 0002 | Desktop    | Firefox       | Peak     | 0    | 513500.32 | NaN   | 1     |
 | 0003 | Desktop    | Chrome        | Off-Peak | 0    | 441000.45 | 25   | 0     |
 | 0004 | Desktop    | Safari        | Weekend  | 0    | 840000.4  | 2    | 0     |
-| 0005 | Desktop    | Chrome        | Peak     | 1    | 275500.47 | 22   | 1     |
+| 0005 | Desktop    | Chrome        | Peak     | 1    | NaN       | 22   | 1     |
 
 It is obvious that the _Var1-3_ represent the device type, browser type, and time range respectively. To make these variable names descriptive, you can rename the dataframe columns using Spark Dataframe's method `WithColumnRenamed()`. In this exercise, I found a really useful function [foldLeft()](http://allaboutscala.com/tutorials/chapter-8-beginner-tutorial-using-scala-collection-functions/scala-foldleft-example/) that makes this process more scalable, in the sense that you need not write 100 statements for 100 variable's name changes. All you need is to make the _old name_ and _new name_ as a key-value pair and store it in the scala _Map_ value. No other code change is required. Similary, another example demonstrates how foldLeft is employed to replace NaN value for each numeric variable by its mean or median in the training data.
 ```scala
@@ -101,10 +101,10 @@ display(df_all.limit(5))
 | ID   | Device     | Browser       | TimeRange| Var4 | Var5      | Var6 | label |
 |------|------------|---------------|----------|------|-----------|------|-------|
 | 0001 | SmartPhone | Mobile Safari | Off-Peak | 1    | 484500.47 | 16   | 0     |
-| 0002 | Desktop    | Firefox       | Peak     | 0    | 513500.32 | 16   | 1     |
+| 0002 | Desktop    | Firefox       | Peak     | 0    | 513500.32 | NaN   | 1     |
 | 0003 | Desktop    | Chrome        | Off-Peak | 0    | 441000.45 | 25   | 0     |
 | 0004 | Desktop    | Safari        | Weekend  | 0    | 840000.4  | 2    | 0     |
-| 0005 | Desktop    | Chrome        | Peak     | 1    | 275500.47 | 22   | 1     |
+| 0005 | Desktop    | Chrome        | Peak     | 1    | NaN       | 22   | 1     |
 
 
 Since the subject of this article is about building a model pipeline for deployment, the data exploration section is done off-line and not described here. Next it comes to the section of pipeline creation for feature engineering and model training.
@@ -135,6 +135,14 @@ val var6Imputer = new Imputer()
   .setOutputCol("Var6Impute")
   .setStrategy("median")
 ```
+| ID        | Device     | Browser       | TimeRange | Var4 | Var5      | Var6 | label | Var5Impute | Var6Impute |
+|-----------|------------|---------------|-----------|------|-----------|------|-------|------------|------------|
+| 136581531 | SmartPhone | Mobile Safari | Off-Peak  | 1    | 484500.47 | 16   | 0     | 484500.47  | 16         |
+| 138079502 | Desktop    | Firefox       | Peak      | 0    | 513500.32 | NaN  | 1     | 513500.32  | 16         |
+| 136280501 | Desktop    | Chrome        | Off-Peak  | 0    | 441000.45 | 25   | 0     | 441000.45  | 25         |
+| 136608744 | Desktop    | Safari        | Weekend   | 0    | 840000.4  | 2    | 0     | 840000.4   | 2          |
+| 136576205 | Desktop    | Chrome        | Peak      | 1    | NaN       | 22   | 1     | 275500.5   | 22         |
+
 Next we perform numeric operations on these variables, such as dividing one feature value by the other, taking the logarithmic transform of the value, and scale normalization (Min-Max or Z-score).
 ```scala
 import org.apache.spark.ml.mleap.feature.MathBinary
