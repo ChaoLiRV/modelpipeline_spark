@@ -85,16 +85,16 @@ df_all = columnNameMap.keys.foldLeft(df_all){
   tmpDF.withColumnRenamed(colName, columnNameMap(colName) ) 
 }
 
-/* fill NaN values of each numeric variable with column mean */
-val colNames = Array("Var5", "Var6")
-val colMeans = colNames.map(colName => (colName, df_all.select(avg(col(colName))).first.getDouble(0)) ).toMap // Map(colname->colMean)  
+// /* fill NaN values of each numeric variable with column mean */
+// val colNames = Array("Var5", "Var6")
+// val colMeans = colNames.map(colName => (colName, df_all.select(avg(col(colName))).first.getDouble(0)) ).toMap // Map(colname->colMean)  
 // val colMedian = colNames.map(colName => (colName, df_all.select(col(colName)).orderBy(desc(colName)).limit((df_all.count()/2).toInt).orderBy(asc(colName)).first().getDouble(0)) ).toMap //Map(colname->colMedian)      
-val DUMMY_NULL = -1.0
-df_all = df_all.na.fill(DUMMY_NULL, colNames)
-df_all = colNames.foldLeft(df_all){
-  (tmpDF, colName) => tmpDF.withColumn(colName, 
-                     when(col(colName)===DUMMY_NULL, colMeans(colName)).otherwise(col(colName)) ) 
-}
+// val DUMMY_NULL = -1.0
+// df_all = df_all.na.fill(DUMMY_NULL, colNames)
+// df_all = colNames.foldLeft(df_all){
+//   (tmpDF, colName) => tmpDF.withColumn(colName, 
+//                      when(col(colName)===DUMMY_NULL, colMeans(colName)).otherwise(col(colName)) ) 
+// }
 display(df_all.limit(5))
 ```
 | ID   | Device     | Browser       | TimeRange| Var4 | Var5      | Var6 | label |
