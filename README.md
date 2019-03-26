@@ -121,7 +121,7 @@ val Array(trainingData, testingData) = df_all.randomSplit(Array(0.8, 0.2), split
 
 #### Numeric Variables
 For model running in production, it is always a good habit of setting a defensive layer to handle the anomaly gracefully. In this example, we set an **Imputer** transformer first in the pipeline to handle the missing values for numeric variables _Var5_ and _Var6_. 
-Two additional columns _Var5Impute_ and _Var6Impute_ are generated as a result that replace the original _NaN_ value by their median(see the example outcome below). 
+This process generates two additional columns _Var5Impute_ and _Var6Impute_ that replace the _NaN_ value in original column _Var5_ and _Var6_ by their respective median(see the example outcome below). 
 Note the choice of the transformer is to some extent limited to the availability in **MLeap** _(refer to this document: <http://mleap-docs.combust.ml/core-concepts/transformers/support.html>)_. MLeap is the tool that we use to serialize the Spark model pipelines and we will touch on that later in this post. Suppose the transfomer function that you need does not exist on their list, follow the procedure here <http://mleap-docs.combust.ml/mleap-runtime/custom-transformer.html> to create the custom transformer.
 ```scala
 import org.apache.spark.ml.mleap.feature.Imputer
@@ -181,7 +181,9 @@ val scaler = new feature.StandardScaler()
 | 136576205 | Desktop    | Chrome        | Peak      | 1    | NaN       | 22   | 1     | 275500.5   | 22         | 12522.75     | 5.440122391 | [12522.75, 5.440122391]    | [-0.2024, -0.2993]      |
 
 #### Categorical Variables
-The first process step is same as the numerical variables, to set an imputation stage for handling the missing value in real world scenario. MLeap does not provide this transformer function as you cannot find it on this list <http://mleap-docs.combust.ml/core-concepts/transformers/support.html>, and therefore we create our own transformer _**StringImputer**_ by following the MLeap document as aforementioned. In categorical variables, sometimes values are representing the same thing and can be bucketed into one group, for instance _"Mobile"_ and _"SmartPhone"_. In this situation, the _**StringMapper**_ transformer is employed to achieve this. Note that I utilize a custom transformer in the code instead of the MLeap built-in _StringMap_, for the reason that their transformer does not allow to set the default value in the map. Next stage in the pipeline is the _**StringIndexer**_ that is another defensive layer to handle unseen values during training.
+The same step is for categorical variables at the beginning, to set an imputation stage for handling the missing value. MLeap does not provide this transformer function as you cannot find it on this list <http://mleap-docs.combust.ml/core-concepts/transformers/support.html>, and therefore we create our own transformer _**StringImputer**_ by following the MLeap document as aforementioned. 
+In categorical variables, values representing the same object can be bucketed into one group, for instance _"Mobile"_ and _"SmartPhone"_. In this situation, the _**StringMapper**_ transformer is employed to achieve this. Note that I utilize a custom transformer in the code instead of the MLeap built-in _StringMap_, for the reason that _StringMap_ does not allow to set the default value in the map. 
+Next stage in the pipeline is the _**StringIndexer**_ that is another defensive layer to handle unseen values during training. The categorical values are mapped to numeric index based off of the frequency. For example, the dataset contains more _Desktop_ than _SmartPhone_ and thus their corresponding string index are 0.0 and 1.0. An unseen device value like _Console_ will be mapped to 2.0.  
 See the table below with the columns _Device_Impute_, _Device_Map_ and _Device_Index_. For the best of comparison, the numeric variable columns are not shown here.
 ```scala
 import com.redventures.custom.core.transformer.StringMapperModel 
@@ -367,4 +369,4 @@ val zipBundleM = (for(bundle <- managed(BundleFile("jar:file:/chao/mymodel.zip")
 val loaded_pipeline_gbt = zipBundleM.root
 ```
 ## Conclusion
-This post elaborates on the process of building a machine learning model pipeline in Spark, with the code snippets providing all the details for the implementation from data import, preprocessing, feature engineering, model tuning and training, to its deployment. Following this protocol enables myself to build a predictive model in production and serve our business. Hopefully this can be also helpful as a tutorial for people who are struggling with the Spark machine learning process.
+This post elaborates on the process of building a machine learning model pipeline in Spark, with the code snippets providing all the details for the implementation from data import, preprocessing, feature engineering, model tuning and training, to its deployment. Following this protocol enables myself to build a predictive model in production and serve our business. Hopefully this can be also helpful as a tutorial for people who are new to the Spark machine learning process.
