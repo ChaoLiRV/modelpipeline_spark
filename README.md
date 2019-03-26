@@ -195,7 +195,7 @@ val deviceImputer = new StringImputer(uid = "device_imp", model = StringImputerM
                 .setInputCol("Device")
                 .setOutputCol("Device_Impute")
 val deviceMapper = new StringMapper(uid = "device_map", model = StringMapperModel(
-                Map("Mobile"->"SmartPhone","SmartPhone"->"SmartPhone","Desktop"->"Desktop","Tablet"->"Tablet"), "OtherDevices") ) //
+                Map("Mobile"->"SmartPhone","SmartPhone"->"SmartPhone","Desktop"->"Desktop"), "OtherDevices") ) //
                 .setInputCol("Device_Impute")
                 .setOutputCol("Device_Map")
 val deviceIndexer = new feature.StringIndexer()
