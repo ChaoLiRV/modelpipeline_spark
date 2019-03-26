@@ -218,7 +218,7 @@ The output values by one-hot-encoding are represented in a sparse format. For ex
 val timeImputer = new StringImputer(uid = "time_imp", model = StringImputerModel("Peak"))
                 .setInputCol("TimeRange")
                 .setOutputCol("Time_Impute")
-val timeRangeIndexer = new StringIndexer()
+val timeIndexer = new StringIndexer()
                 .setInputCol("Time_Impute")
                 .setOutputCol("Time_Index")
                 .setHandleInvalid("keep")
@@ -257,7 +257,7 @@ val feature_stages = new Pipeline()
                 .setStages( Array(var5Imputer, var6Imputer, // numeric variable imputer
                                   divider, logTramsformer, assembler_num, scaler,  //numeric variable processing
                                   deviceImputer, deviceMapper, deviceIndexer, // Device type processing
-                                  timeImputer, timeRangeIndexer, // Time range
+                                  timeImputer, timeIndexer, // Time range
                                   browserImputer, browserIndexer, // Browser 
                                   ohes, // one hot encoding
                                   assembler_all))
