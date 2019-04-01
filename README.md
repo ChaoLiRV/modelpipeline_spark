@@ -135,12 +135,10 @@ val var5Imputer: ImputerModel = new Imputer()
   .setInputCol("Var5")
   .setOutputCol("Var5Impute")
   .setStrategy("median")
-  .fit(df_all_renamed)
 val var6Imputer: ImputerModel = new Imputer()
   .setInputCol("Var6")
   .setOutputCol("Var6Impute")
   .setStrategy("median")
-  .fit(df_all_renamed)
 
 // For a look at how the imputation works, let's fit the imputers and examine the transformed output
 val var5ImputerModel: ImputerModel = var5Imputer.fit(trainingData)
