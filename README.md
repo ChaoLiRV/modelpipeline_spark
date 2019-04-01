@@ -288,7 +288,7 @@ val feature_stages = new Pipeline()
                                   ohes, // one hot encoding
                                   assembler_all))
 
-val df_transformed = feature_stages.transform(df_all_renamed)
+val df_transformed = feature_stages.transform(trainingData)
 display(df_transformed)
 ```
 
@@ -331,7 +331,7 @@ val gbt_best = gbt.setMaxDepth(bestModel.getMaxDepth).setStepSize(bestModel.getS
 
 // add model training stage to complete the pipeline
 val final_pipeline_gbt = new Pipeline().setStages(feature_stages.getStages ++ Array(gbt_best))
-val model_gbt = final_pipeline_gbt.fit(df_all_renamed)
+val model_gbt = final_pipeline_gbt.fit(trainingData)
 ```
 #### Model Evaluation
 Since this is a binary classification task, the area under the _ROC_ curve is calculated to measure the model performance. In addition, the gradient boosting models are also evaluated against the vanilla version model's logistic regression.
