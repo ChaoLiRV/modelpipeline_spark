@@ -1,7 +1,7 @@
 # Create and Deploy a Machine Learning Model Pipeline in Spark
-As data scientists at Red Ventures, we define ourselves as [type _'B'_ data scientists]( <https://www.dezyre.com/article/type-a-data-scientist-vs-type-b-data-scientist/194>), which differs from the role of business intelligence or data analysts. Besides providing business insights to drive actionable items, we are also dedicated to building models from end to end and deploying them as a service for business usage, both internally and externally. This post describes the general process of building a classification model pipeline in **Spark** and touches upon its deployment via a REST API.
+As data scientists at Red Ventures, we define ourselves as [type _'B'_ data scientists]( <https://www.dezyre.com/article/type-a-data-scientist-vs-type-b-data-scientist/194>), which differs from the role of business intelligence or data analysts. Besides providing business insights to drive actionable items, we are also dedicated to building models from end to end and deploying them as a service for business usage, both internally and externally. This post describes the general process of building a classification model pipeline in **Spark** and touches upon its deployment via a REST API with code snippets that provide all the details for implementation from data import, preprocessing, feature engineering, model tuning and training to its deployment.
 
-_The Spark code in this post is written in **Scala** and run on the **databricks** platform_
+_The Spark code in this post is written in **Scala** and run on the **Databricks** platform_
 
 ## Data Import
 The first thing we need to do is import the data for training our model. Our data, in this example, is stored in the Snowflake warehouse in the cloud. To enable our SQL queries to read data from the Snowflake database, we'll use the [databricks-snowflake connector](https://docs.databricks.com/spark/latest/data-sources/snowflake.html). When we have a connection, we'll use a Scala function to query and read from the Snowflake database in the cloud.
@@ -53,7 +53,7 @@ def readDataFromSnowflake(dateStart: String, dateStop: String) : DataFrame = {
 }
 ```
 
-To automate the model update process, the date range is extracted from the system datetime every time the job is running. The code below implements the function to obtain the training data from a six month (180 days) look-back window. A snapshot of this data set suggests the features are comprised of various types, such as categorical variables _Var1, Var2, Var3_, binary variable _Var4_, and numeric variable types _Var5, Var6_. Here _label_ is the classification target that the model learns to predict.
+To automate the model update process, the date range is extracted from the system datetime every time the job is running. The code below implements the function to obtain the training data from a six month (180 days) look-back window. A snapshot of this dataset suggests the features are comprised of various types, such as categorical variables _Var1, Var2, Var3_, binary variable _Var4_, and numeric variable types _Var5_ and _Var6_. Here _label_ is the classification target that the model learns to predict.
 
 ```scala
 import java.util.{Calendar, Date}
@@ -77,7 +77,7 @@ display(df_all.limit(5))
 | 0004 | Desktop    | Safari   | Weekend  | 0    | 840000.4  | 2    | 0     |
 | 0005 | Desktop    | Chrome   | Peak     | 1    | NaN       | 22   | 1     |
 
-It is obvious that the _Var1-3_ represent the device type, browser type, and time range respectively. To make these variable names descriptive, you can rename the dataframe columns using Spark Dataframe's method `withColumnRenamed()`. In this exercise, I found a really useful function [foldLeft()](http://allaboutscala.com/tutorials/chapter-8-beginner-tutorial-using-scala-collection-functions/scala-foldleft-example/) that makes this process more scalable, in the sense that you need not write 100 statements for 100 variable's name changes. All you need is to make the _old name_ and _new name_ as a key-value pair and store it in the scala _Map_ value. No other code change is required. Another benefit of the `foldLeft()` function is that you don't have to loop through an overwrite a `var` (anything which is mutable is riskier), but can loop through a `val` and output a `val`. 
+_Var1-3_ represent the device type, browser type, and time range respectively. To make these variable names more descriptive, you can rename the dataframe columns using Spark Dataframe's method `withColumnRenamed()`. In this exercise, I found a really useful function [foldLeft()](http://allaboutscala.com/tutorials/chapter-8-beginner-tutorial-using-scala-collection-functions/scala-foldleft-example/) that makes this process more scalable in the sense that you need not write 100 statements for 100 variable name changes. All that's needed is to make the _old name_ and _new name_ a key-value pair and store it in the scala _Map_ value. No other code change is required. Another benefit of the `foldLeft()` function is that you don't have to loop through an overwrite a `var` (anything which is mutable is riskier), but can loop through a `val` and output a `val`.
 
 ```scala
 /* rename column names */
@@ -121,16 +121,17 @@ val Array(trainingData, testingData) = df_all_renamed.randomSplit(Array(0.8, 0.2
 ## Feature Transformer Pipeline
 
 #### Numeric Variables
-For a model running in production, it is always a good habit to set a defensive layer to handle any anomalies gracefully. In this example, we set an **Imputer** transformer first in the pipeline to handle the missing values for numeric variables _Var5_ and _Var6_.
+For a model running in production, it is always a good habit to set a defensive layer to handle any anomalies gracefully. In this example, we set an **Imputer** transformer in the pipeline to handle the missing values for numeric variables _Var5_ and _Var6_.
 
 This process generates two additional columns _Var5Impute_ and _Var6Impute_ that replace the _NaN_ value in original column _Var5_ and _Var6_ by their respective median (see the example outcome below).
-Note the choice of the transformer is to some extent limited to the availability in **MLeap** _(refer to this document: <http://mleap-docs.combust.ml/core-concepts/transformers/support.html>)_. MLeap is the tool that we use to serialize the Spark model pipelines and we will touch on that later in this post. Suppose the transfomer function that you need does not exist on their list, follow the procedure here <http://mleap-docs.combust.ml/mleap-runtime/custom-transformer.html> to create the custom transformer.
+
+**Note**: The choice of the transformer is, to some extent, limited to the availability in [**MLeap**](http://mleap-docs.combust.ml/core-concepts/transformers/support.html). MLeap is the tool that we use to serialize the Spark model pipelines, and we'll touch on that later in this post. If the transformer function that you need doesn't exist on their list, follow [the procedure here](http://mleap-docs.combust.ml/mleap-runtime/custom-transformer.html) to create the custom transformer.
 
 ```scala
 import org.apache.spark.ml.mleap.feature.Imputer
 import org.apache.spark.ml.feature.ImputerModel
 
-// Configure the imputer for each numeric column 
+// Configure the imputer for each numeric column
 val var5Imputer: ImputerModel = new Imputer()
   .setInputCol("Var5")
   .setOutputCol("Var5Impute")
@@ -161,8 +162,9 @@ display(trainingData_imputed)
 | 136608744 | Desktop    | Safari        | Weekend   | 0    | 840000.4  | 2    | 0     | 840000.4   | 2          |
 | 136576205 | Desktop    | Chrome        | Peak      | 1    | NaN       | 22   | 1     | 275500.5   | 22         |
 
-Next we perform numeric operations on these variables, such as dividing one feature value by the other, taking the logarithmic transform of the value, and scale normalization (Min-Max or Z-score).
-The newly created columns by these operations are concatenated to the table as shown in the following example:
+Next, we perform numeric operations on these variables, such as dividing one feature value by the other, taking the logarithmic transform of the value, and scale normalization (Min-Max or Z-score).
+
+The columns created by these operations are concatenated to the table as shown in the following example:
 
 ```scala
 import org.apache.spark.ml.mleap.feature.MathBinary
@@ -200,11 +202,11 @@ val scaler = new feature.StandardScaler()
 | 136576205 | Desktop    | Chrome        | Peak      | 1    | NaN       | 22   | 1     | 275500.5   | 22         | 12522.75     | 5.440122391 | [12522.75, 5.440122391]    | [-0.2024, -0.2993]      |
 
 #### Categorical Variables
-The same goes for categorical variables. At the beginning, we'll set an imputation stage for handling missing values. MLeap doesn't provide this transformer function, as you can't find it on this list <http://mleap-docs.combust.ml/core-concepts/transformers/support.html>. Therefore, we've written a custom transformer, _**StringImputer**_, by following the MLeap document as aforementioned. This transformer imputes missing data with a String value of your choice.
+The same goes for categorical variables. At the beginning, we'll set an imputation stage for handling missing values. MLeap doesn't provide this transformer function, as you can't find it on [this list](http://mleap-docs.combust.ml/core-concepts/transformers/support.html). Therefore, we've written a custom transformer, _**StringImputer**_, by following the aforementioned MLeap document. This transformer imputes missing data with a String value of your choice.
 
-For categorical variables, there are instances when we might want to bucket 2 Strings that represent similar concepts, such as _"Mobile"_ and _"SmartPhone"_. In this situation, the _**StringMapper**_ transformer is employed to achieve this. Note that I utilize a custom transformer in the code instead of the MLeap built-in _StringMap_, because _StringMap_ doesn't allow the default value to be set in the map.
+For categorical variables, there are instances when we might want to bucket two Strings that represent similar concepts, such as _"Mobile"_ and _"SmartPhone"_. In this situation, the _**StringMapper**_ transformer is employed to achieve this. Note that I utilize a custom transformer in the code instead of the MLeap built-in _StringMap_, because _StringMap_ doesn't allow the default value to be set in the map.
 
-Next, we'll utilize _**StringIndexer**_ as an additional defensive layer for handling unseen values during training. The categorical values are mapped to numeric index based off of the frequency. For example, the dataset contains more _Desktop_ than _SmartPhone_ and thus their corresponding string index are 0.0 and 1.0. An unseen device value like _Console_ will be mapped to 2.0.
+Next, we'll utilize _**StringIndexer**_ as an additional defensive layer for handling unseen values during training. The categorical values are mapped to numeric index based off of the frequency. For example, the dataset contains more _Desktop_ than _SmartPhone_ and, thus, their corresponding string indices are 0.0 and 1.0. An unseen device value like _Console_ will be mapped to 2.0.
 
 See the following table with the columns _Device_Impute_, _Device_Map_ and _Device_Index_. For the best of comparison, the numeric variable columns are not shown here.
 
@@ -236,8 +238,8 @@ val deviceIndexer = new feature.StringIndexer()
 | 136608744 | Desktop    | Safari  | Weekend   | Desktop       | Desktop    | 0.0          |
 | 136576205 | Desktop    | Chrome  | Peak      | Desktop       | Desktop    | 0.0          |
 
-Repeat the procedures to apply transformers to other categorical variables _TimeRange_ and _Browser_. And then set the _one-hot encoding_ stage for all processed categorical variables.
-The output values by one-hot-encoding are represented in a sparse format. For example, _(2, [1], [1.0])_ in _Device_OHE_ indicates a vector of length of 2 with 1.0 at position 1 and 0 elsewhere.
+Repeat the procedures to apply transformers to other categorical variables _TimeRange_ and _Browser_. And then set the _one-hot encoding_ stage for all processed categorical variables. The output values by one-hot-encoding are represented in a sparse format. For example, _(2, [1], [1.0])_ in _Device_OHE_ indicates a vector of length of 2 with 1.0 at position 1 and 0 elsewhere.
+
 ```scala
 /* TimeRange */
 val timeImputer = new StringImputer(uid = "time_imp", model = StringImputerModel("Peak"))
@@ -270,7 +272,8 @@ val ohes = new OneHotEncoderEstimator()
 | 136608744 | Desktop    | Safari  | Weekend   | Desktop       | Desktop    | 0.0          | Weekend     | 1.0        | Safari         | 2.0           | (2, [0], [1.0]) | (3, [1], [1.0]) | (4, [2], [1.0]) |
 | 136576205 | Desktop    | Chrome  | Peak      | Desktop       | Desktop    | 0.0          | Peak        | 0.0        | Chrome         | 0.0           | (2, [0], [1.0]) | (3, [0], [1.0]) | (4, [0], [1.0]) |
 
-The classification model in the **spark.ml** package is an estimator, which requires all feature data to be assembled as a vector for each record in the column _`"feature"`_. This is done by the transformer `VectorAssembler()` and again the output values are represented in a sparse format as shown in the following table.
+The classification model in the **spark.ml** package is an estimator, which requires all feature data to be assembled as a vector for each record in the column _`"feature"`_. This is done by the transformer `VectorAssembler()` and, again, the output values are represented in a sparse format as shown in the following table.
+
 Lastly, we stack all the aforementioned transformers in the sequence to a pipeline object. As a consequence, every single record of both the training and testing set is guaranteed to go through the same feature engineering process without incurring exception by anomaly value.
 
 ```scala
@@ -334,7 +337,7 @@ val final_pipeline_gbt = new Pipeline().setStages(feature_stages.getStages ++ Ar
 val model_gbt = final_pipeline_gbt.fit(trainingData)
 ```
 #### Model Evaluation
-Since this is a binary classification task, the area under the _ROC_ curve is calculated to measure the model performance. In addition, the gradient boosting models are also evaluated against the vanilla version model's logistic regression.
+Because this is a binary classification task, the area under the _ROC_ curve is calculated to measure the model performance. In addition, the gradient boosting models are also evaluated against the vanilla version model's logistic regression.
 ```scala
 // benchmark model performance
 var lr = new classification.LogisticRegression().setMaxIter(100).setElasticNetParam(1).setRegParam(0.001)
@@ -386,7 +389,7 @@ for(bundle <- managed(BundleFile("jar:file:/chao/mymodel.zip"))) {
 }
 ```
 
-The model deployment is implemented as a service via the REST API. Simply take the saved JSON file and deserialize it inside a Scala web framework. This article <https://auth0.com/blog/build-and-secure-a-scala-play-framework-api/> demonstrates how to build an API using Scala _**Play**_ framework.
+The model deployment is implemented as a service via the REST API. Simply take the saved JSON file and deserialize it inside a Scala web framework. [This article](https://auth0.com/blog/build-and-secure-a-scala-play-framework-api/) demonstrates how to build an API using Scala _**Play**_ framework.
 ```scala
 import ml.combust.bundle.BundleFile
 import ml.combust.mleap.runtime.MleapSupport._
@@ -400,4 +403,6 @@ val loaded_pipeline_gbt = zipBundleM.root
 ```
 
 ## Conclusion
-This post elaborates on the process of building a machine learning model pipeline in Spark, with the code snippets providing all the details for the implementation from data import, preprocessing, feature engineering, model tuning and training, to its deployment. This protocol enables me to build a predictive model in production and serve our business. Hopefully this can be also helpful as a tutorial for people who are new to the Spark machine learning process.
+This post elaborates on the process of building a machine learning model pipeline in Spark, with the code snippets providing all the details for the implementation from data import, preprocessing, feature engineering, model tuning and training to its deployment. This protocol enables me to build a predictive model in production and serve our business. Hopefully this can also be a helpful tutorial for people who are new to the Spark machine learning process.
+
+_Interested in solving complex problems and building products that drive value? Come check us out at RedVentures.com._
