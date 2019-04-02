@@ -4,7 +4,7 @@ As data scientists at Red Ventures, we define ourselves as [type _'B'_ data scie
 _The Spark code in this post is written in **Scala** and run on the **Databricks** platform_
 
 ## Data Import
-The first thing we need to do is import the data for training our model. Our data, in this example, is stored in the Snowflake warehouse in the cloud. To enable our SQL queries to read data from the Snowflake database, we'll use the [databricks-snowflake connector](https://docs.databricks.com/spark/latest/data-sources/snowflake.html). When we have a connection, we'll use a Scala function to query and read from the Snowflake database in the cloud.
+The first thing we need to do is to import the data for training our model. Our data, in this example, is stored in the Snowflake warehouse in the cloud. To enable our SQL queries to read data from the Snowflake database, we'll use the [databricks-snowflake connector](https://docs.databricks.com/spark/latest/data-sources/snowflake.html). When we have a connection, we'll use a Scala function to query and read from the Snowflake database in the cloud.
 
 The following `readDataFromSnowflake` function does the following:
 - Configures the connection with Snowflake
