@@ -1,15 +1,15 @@
 # Create and Deploy a Machine Learning Model Pipeline in Spark
-As data scientists in Red Ventures, we define ourselves as [type _'B'_ data scientist]( <https://www.dezyre.com/article/type-a-data-scientist-vs-type-b-data-scientist/194>), which differs from the role of business intelligence or data analysts. Besides providing business insights to drive actionable items, we are also dedicated to building models from end to end and deploying them as a service for business usage, both internally and externally. This post describes the general process of building a classification model pipeline in **Spark** and touches upon its deployment via a REST API.
+As data scientists at Red Ventures, we define ourselves as [type _'B'_ data scientists]( <https://www.dezyre.com/article/type-a-data-scientist-vs-type-b-data-scientist/194>), which differs from the role of business intelligence or data analysts. Besides providing business insights to drive actionable items, we are also dedicated to building models from end to end and deploying them as a service for business usage, both internally and externally. This post describes the general process of building a classification model pipeline in **Spark** and touches upon its deployment via a REST API.
 
 _The Spark code in this post is written in **Scala** and run on the **databricks** platform_
 
 ## Data Import
 The first thing we need to do is import the data for training our model. Our data, in this example, is stored in the Snowflake warehouse in the cloud. To enable our SQL queries to read data from the Snowflake database, we'll use the [databricks-snowflake connector](https://docs.databricks.com/spark/latest/data-sources/snowflake.html). When we have a connection, we'll use a Scala function to query and read from the Snowflake database in the cloud.
 
-The following `readDatafromSnowflake` function does the following:
+The following `readDataFromSnowflake` function does the following:
 - Configures the connection with Snowflake
 - Executes a query to select all data fields from the Snowflake table `myTable` under the schema `mySchema` for a particular date range, specified by the function arguments
-- Returns the entire dataset in a Dataframe format
+- Returns the entire dataset as a Spark DataFrame
 
 ```scala
 import net.snowflake.spark.snowflake.SnowflakeConnectorUtils
@@ -18,11 +18,12 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql._
 
-def readDatafromSnowflake(dateStart: String, dateStop: String) : DataFrame = {
+def readDataFromSnowflake(dateStart: String, dateStop: String) : DataFrame = {
   // dateStart:String e.g. "2017-12-01"
   // dateStop:String e.g. "2018-06-01"
 
   // Snowflake configuration
+  // Note: dbutils are utilities available on the Databricks platform, including functionality used below to securely store and use credentials without making them visible (more info here: https://docs.databricks.com/user-guide/dev-tools/dbutils.html)
   val user = dbutils.secrets.get("data-warehouse", "snowflake-user") // encode the username
   val password = dbutils.secrets.get("data-warehouse", "snowflake-password")// encode the password
   val SNOWFLAKE_SOURCE_NAME = "net.snowflake.spark.snowflake"
@@ -60,11 +61,11 @@ import java.text.SimpleDateFormat
 
 val formatter = new SimpleDateFormat("YYYY-MM-dd")
 val calendar = Calendar.getInstance()
-val dateStop:String = formatter.format(calendar.getTime()) // get current date
+val dateStop: String = formatter.format(calendar.getTime()) // get current date
 calendar.add(Calendar.DAY_OF_YEAR, -180) // look back over the past 180 days
-val dateStart:String = formatter.format(calendar.getTime())
+val dateStart: String = formatter.format(calendar.getTime())
 
-var df_all :DataFrame = readDatafromSnowflake(dateStart, dateStop)
+val df_all: DataFrame = readDataFromSnowflake(dateStart, dateStop)
 display(df_all.limit(5))
 ```
 
@@ -76,7 +77,7 @@ display(df_all.limit(5))
 | 0004 | Desktop    | Safari   | Weekend  | 0    | 840000.4  | 2    | 0     |
 | 0005 | Desktop    | Chrome   | Peak     | 1    | NaN       | 22   | 1     |
 
-It is obvious that the _Var1-3_ represent the device type, browser type, and time range respectively. To make these variable names descriptive, you can rename the dataframe columns using Spark Dataframe's method `WithColumnRenamed()`. In this exercise, I found a really useful function [foldLeft()](http://allaboutscala.com/tutorials/chapter-8-beginner-tutorial-using-scala-collection-functions/scala-foldleft-example/) that makes this process more scalable, in the sense that you need not write 100 statements for 100 variable's name changes. All you need is to make the _old name_ and _new name_ as a key-value pair and store it in the scala _Map_ value. No other code change is required. Similarly, another example demonstrates how foldLeft is employed to replace NaN values for each numeric variable by its mean or median in the training data.
+It is obvious that the _Var1-3_ represent the device type, browser type, and time range respectively. To make these variable names descriptive, you can rename the dataframe columns using Spark Dataframe's method `withColumnRenamed()`. In this exercise, I found a really useful function [foldLeft()](http://allaboutscala.com/tutorials/chapter-8-beginner-tutorial-using-scala-collection-functions/scala-foldleft-example/) that makes this process more scalable, in the sense that you need not write 100 statements for 100 variable's name changes. All you need is to make the _old name_ and _new name_ as a key-value pair and store it in the scala _Map_ value. No other code change is required. Another benefit of the `foldLeft()` function is that you don't have to loop through an overwrite a `var` (anything which is mutable is riskier), but can loop through a `val` and output a `val`. 
 
 ```scala
 /* rename column names */
@@ -88,22 +89,12 @@ It is obvious that the _Var1-3_ represent the device type, browser type, and tim
 val columnNameMap = Map("Var1"->"Device",
                         "Var2"->"Browser",
                         "Var3"->"TimeRange")
-df_all = columnNameMap.keys.foldLeft(df_all){
+val df_all_renamed = columnNameMap.keys.foldLeft(df_all){
   (tmpDF, colName) =>
   tmpDF.withColumnRenamed(colName, columnNameMap(colName) )
 }
 
-// /* fill NaN values of each numeric variable with column mean */
-// val colNames = Array("Var5", "Var6")
-// val colMeans = colNames.map(colName => (colName, df_all.select(avg(col(colName))).first.getDouble(0)) ).toMap // Map(colname->colMean)
-// val colMedian = colNames.map(colName => (colName, df_all.select(col(colName)).orderBy(desc(colName)).limit((df_all.count()/2).toInt).orderBy(asc(colName)).first().getDouble(0)) ).toMap //Map(colname->colMedian)
-// val DUMMY_NULL = -1.0
-// df_all = df_all.na.fill(DUMMY_NULL, colNames)
-// df_all = colNames.foldLeft(df_all){
-//   (tmpDF, colName) => tmpDF.withColumn(colName,
-//                      when(col(colName)===DUMMY_NULL, colMeans(colName)).otherwise(col(colName)) )
-// }
-display(df_all.limit(5))
+display(df_all_renamed.limit(5))
 ```
 
 | ID   | Device     | Browser       | TimeRange| Var4 | Var5      | Var6 | label |
@@ -124,7 +115,7 @@ import org.apache.spark.ml.attribute._
 
 // Split training- testing dataset
 val splitSeed = 1234
-val Array(trainingData, testingData) = df_all.randomSplit(Array(0.8, 0.2), splitSeed)
+val Array(trainingData, testingData) = df_all_renamed.randomSplit(Array(0.8, 0.2), splitSeed)
 ```
 
 ## Feature Transformer Pipeline
@@ -137,16 +128,29 @@ Note the choice of the transformer is to some extent limited to the availability
 
 ```scala
 import org.apache.spark.ml.mleap.feature.Imputer
+import org.apache.spark.ml.feature.ImputerModel
 
-// Handle missing value of numeric variables
-val var5Imputer = new Imputer()
+// Configure the imputer for each numeric column 
+val var5Imputer: ImputerModel = new Imputer()
   .setInputCol("Var5")
   .setOutputCol("Var5Impute")
   .setStrategy("median")
-val var6Imputer = new Imputer()
+val var6Imputer: ImputerModel = new Imputer()
   .setInputCol("Var6")
   .setOutputCol("Var6Impute")
   .setStrategy("median")
+
+// For a look at how the imputation works, let's fit the imputers and examine the transformed output
+val var5ImputerModel: ImputerModel = var5Imputer.fit(trainingData)
+val var6ImputerModel: ImputerModel = var6Imputer.fit(trainingData)
+val listOfImputers: List[ImputerModel] = List(var5ImputerModel, var6ImputerModel)
+
+// Loop through each imputer and transform the original training data
+val trainingData_imputed = listOfImputers.foldLeft(trainingData) { (prev: DataFrame, curr: ImputerModel) =>
+  curr.transform(prev)
+}
+
+display(trainingData_imputed)
 ```
 
 | ID        | Device     | Browser       | TimeRange | Var4 | Var5      | Var6 | label | Var5Impute | Var6Impute |
@@ -174,7 +178,7 @@ val divider = new MathBinary(uid = "loantovalue", model = MathBinaryModel(Divide
                 .setInputB("Var6Impute")
                 .setOutputCol("Var5_to_Var6")
 // unary operation (log transformation) on a single feature
-val logTramsformer = new MathUnary(uid = "ltvlog", model = MathUnaryModel(Log)) //
+val logTransformer = new MathUnary(uid = "ltvlog", model = MathUnaryModel(Log)) //
                 .setInputCol("Var5Impute")
                 .setOutputCol("Var5_Log")
 
@@ -196,9 +200,9 @@ val scaler = new feature.StandardScaler()
 | 136576205 | Desktop    | Chrome        | Peak      | 1    | NaN       | 22   | 1     | 275500.5   | 22         | 12522.75     | 5.440122391 | [12522.75, 5.440122391]    | [-0.2024, -0.2993]      |
 
 #### Categorical Variables
-The same goes for categorical variables. At the beginning, we'll set an imputation stage for handling missing values. MLeap doesn't provide this transformer function, as you can't find it on this list <http://mleap-docs.combust.ml/core-concepts/transformers/support.html>. Therefore, we'll create our own transformer, _**StringImputer**_, by following the MLeap document as aforementioned.
+The same goes for categorical variables. At the beginning, we'll set an imputation stage for handling missing values. MLeap doesn't provide this transformer function, as you can't find it on this list <http://mleap-docs.combust.ml/core-concepts/transformers/support.html>. Therefore, we've written a custom transformer, _**StringImputer**_, by following the MLeap document as aforementioned. This transformer imputes missing data with a String value of your choice.
 
-In categorical variables, values representing the same object can be bucketed into one group, for instance _"Mobile"_ and _"SmartPhone"_. In this situation, the _**StringMapper**_ transformer is employed to achieve this. Note that I utilize a custom transformer in the code instead of the MLeap built-in _StringMap_, because _StringMap_ doesn't allow the default value to be set in the map.
+For categorical variables, there are instances when we might want to bucket 2 Strings that represent similar concepts, such as _"Mobile"_ and _"SmartPhone"_. In this situation, the _**StringMapper**_ transformer is employed to achieve this. Note that I utilize a custom transformer in the code instead of the MLeap built-in _StringMap_, because _StringMap_ doesn't allow the default value to be set in the map.
 
 Next, we'll utilize _**StringIndexer**_ as an additional defensive layer for handling unseen values during training. The categorical values are mapped to numeric index based off of the frequency. For example, the dataset contains more _Desktop_ than _SmartPhone_ and thus their corresponding string index are 0.0 and 1.0. An unseen device value like _Console_ will be mapped to 2.0.
 
@@ -209,14 +213,16 @@ import com.redventures.custom.core.transformer.StringMapperModel
 import org.apache.spark.ml.custom.transformer.StringMapper
 import org.apache.spark.ml.custom.transformer.StringImputer
 
-/* Device */
+/* Device Transformers*/
 val deviceImputer = new StringImputer(uid = "device_imp", model = StringImputerModel("OtherDevices"))
                 .setInputCol("Device")
                 .setOutputCol("Device_Impute")
+
 val deviceMapper = new StringMapper(uid = "device_map", model = StringMapperModel(
                 Map("Mobile"->"SmartPhone","SmartPhone"->"SmartPhone","Desktop"->"Desktop"), "OtherDevices") ) //
                 .setInputCol("Device_Impute")
                 .setOutputCol("Device_Map")
+
 val deviceIndexer = new feature.StringIndexer()
                 .setInputCol("Device_Map")
                 .setOutputCol("Device_Index")
@@ -281,6 +287,9 @@ val feature_stages = new Pipeline()
                                   browserImputer, browserIndexer, // Browser
                                   ohes, // one hot encoding
                                   assembler_all))
+
+val df_transformed = feature_stages.transform(trainingData)
+display(df_transformed)
 ```
 
 | ID        | Device     | Browser | TimeRange | Var4 | Var5      | Var6 | label | Var5Impute | Var6Impute | Var5_to_Var6 | Var5_Log    | numeric_features_vec       | scaled_numeric_features | Device_Impute | Device_Map | Device_Index | Time_Impute | Time_Index | Browser_Impute | Browser_Index | Device_OHE      | Time_OHE        | Browser_OHE     | features                                           |
