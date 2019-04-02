@@ -284,14 +284,14 @@ val assembler_all = new feature.VectorAssembler().setInputCols(featureCols).setO
 // set the pipeline to include all the feature engineering stages
 val feature_stages = new Pipeline()
                 .setStages( Array(var5Imputer, var6Imputer, // numeric variable imputer
-                                  divider, logTramsformer, assembler_num, scaler,  //numeric variable processing
+                                  divider, logTransformer, assemblerNum, scaler,  //numeric variable processing
                                   deviceImputer, deviceMapper, deviceIndexer, // Device type processing
                                   timeImputer, timeIndexer, // Time range
                                   browserImputer, browserIndexer, // Browser
                                   ohes, // one hot encoding
                                   assembler_all))
 
-val df_transformed = feature_stages.transform(trainingData)
+val df_transformed = feature_stages.fit(trainingData).transform(trainingData)
 display(df_transformed)
 ```
 
